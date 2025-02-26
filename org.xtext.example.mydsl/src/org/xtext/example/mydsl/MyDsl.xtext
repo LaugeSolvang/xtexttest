@@ -1,0 +1,40 @@
+grammar org.xtext.example.mydsl.MyDsl with org.eclipse.xtext.common.Terminals
+
+generate myDsl "http://www.xtext.org/example/mydsl/MyDsl"
+
+Model:
+    story=Story
+    player=Player
+    'Locations' locations+=Location+
+    'NPCs' npc+=NPC*
+    'Items' item+=Item*
+    'Actions'action+=Action*
+    'Quests' quest+=Quest*
+    ;
+    
+	
+Story:
+	'Story' ':' name=ID 'Desc' ':' STRING 'Start' ':' startLocation=[Location];
+	
+Location:
+	'Location' name = ID 'NPCs' NPCs+=[NPC]* 'Items' Items+=[Item]* 'Connections' Connections+=[Location]*
+;
+Player:
+	'Player' name=ID 'Actions' actions+=[Action]* 'Inventory' items+=[Item]* 'Attr' attr+=Attribute*;
+
+Attribute:
+	name=ID '=' INT;
+
+Item:
+	'Item' name=ID 'Desc' STRING 'Actions' actions+=[Action]*; 
+	
+NPC:
+	'NPC' name=ID 'Inventory' Items+=[Item]* 'Actions' actions+=[Action]*;
+	
+Action:
+	'Action' name=ID 'command' ':' STRING 'effect' ':' STRING;
+	
+Quest:
+	name=ID 'Desc' STRING 'PreCon' STRING 'WinCon' STRING 'Rewards' Items+=[Item]* 'EndDesc' STRING
+;	
+	
