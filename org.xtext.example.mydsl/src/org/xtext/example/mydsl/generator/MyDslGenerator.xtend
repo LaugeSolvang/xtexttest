@@ -7,6 +7,13 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
+import org.xtext.example.mydsl.myDsl.Story
+import org.xtext.example.mydsl.myDsl.Player
+import javax.xml.stream.Location
+import com.sun.tools.javac.file.Locations
+import org.xtext.example.mydsl.myDsl.Model
+import org.xtext.example.mydsl.myDsl.impl.ModelImpl
+import javax.swing.Action
 
 /**
  * Generates code from your model files on save.
@@ -16,11 +23,214 @@ import org.eclipse.xtext.generator.IGeneratorContext
 class MyDslGenerator extends AbstractGenerator {
 
 	override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
-//		fsa.generateFile('greetings.txt', 'People to greet: ' + 
-//			resource.allContents
-//				.filter(Greeting)
-//				.map[name]
-//				.join(', '))
+		val model = resource.allContents.filter(Model).head
+		
+		// Generate class definitions in the 'game' package
+        fsa.generateFile("Story.java", generateStoryClass)
+        fsa.generateFile("Player.java", generatePlayerClass)
+        fsa.generateFile("Location.java", generateLocationClass)
+        fsa.generateFile("NPC.java", generateNPCClass)
+        fsa.generateFile("Item.java", generateItemClass)
+        fsa.generateFile("Action.java", generateActionClass)
+        fsa.generateFile("Quest.java", generateQuestClass)
+        
+        // Generate the Game class with initialization code
+        fsa.generateFile("Game.java", generateGameClass(model))
+    }
+    
+    // Generate Story class
+    def generateStoryClass() {
+        '''
+        public class Story {
+            private String name;
+            private String desc;
+            private Location startLocation;
+            
+            public Story(String name, String desc, Location startLocation) {
+                this.name = name;
+                this.desc = desc;
+                this.startLocation = startLocation;
+            }
+            
+            public Location getStartLocation() {
+                return startLocation;
+            }
+        }
+        '''
+    }
+    
+    // Generate Player class
+    def generatePlayerClass() {
+        '''        
+        import java.util.*;
+        
+        public class Player {
+            private String name;
+            private List<Action> actions;
+            private List<Item> inventory;
+            private Map<String, Integer> attributes;
+            
+            public Player(String name, List<Action> actions, List<Item> inventory, Map<String, Integer> attributes) {
+                this.name = name;
+                this.actions = actions;
+                this.inventory = inventory;
+                this.attributes = attributes;
+            }
+            
+            public List<Item> getInventory() {
+                return inventory;
+            }
+        }
+        '''
+    }
+    
+    // Generate Location class
+    def generateLocationClass() {
+        '''
+        import java.util.*;
+        
+        public class Location {
+            private String name;
+            private List<NPC> npcs;
+            private List<Item> items;
+            private List<Location> connections;
+            
+            public Location(String name, List<NPC> npcs, List<Item> items, List<Location> connections) {
+                this.name = name;
+                this.npcs = npcs;
+                this.items = items;
+                this.connections = connections;
+            }
+            
+            public List<Location> getConnections() {
+                return connections;
+            }
+        }
+        '''
+    }
+    
+    // Generate NPC class
+    def generateNPCClass() {
+        '''
+        import java.util.*;
+        
+        public class NPC {
+            private String name;
+            private List<Item> inventory;
+            private List<Action> actions;
+            
+            public NPC(String name, List<Item> inventory, List<Action> actions) {
+                this.name = name;
+                this.inventory = inventory;
+                this.actions = actions;
+            }
+        }
+        '''
+    }
+    
+    // Generate Item class
+    def generateItemClass() {
+        '''
+        import java.util.*;
+        
+        public class Item {
+            private String name;
+            private String desc;
+            private List<Action> actions;
+            
+            public Item(String name, String desc, List<Action> actions) {
+                this.name = name;
+                this.desc = desc;
+                this.actions = actions;
+            }
+        }
+        '''
+    }
+    
+    // Generate Action class
+    def generateActionClass() {
+        '''
+        public class Action {
+            private String name;
+            private String command;
+            private String effect;
+            
+            public Action(String name, String command, String effect) {
+                this.name = name;
+                this.command = command;
+                this.effect = effect;
+            }
+        }
+        '''
+    }
+    
+    // Generate Quest class
+    def generateQuestClass() {
+        '''
+        import java.util.*;
+        
+        public class Quest {
+            private String name;
+            private String desc;
+            private String precon;
+            private String wincon;
+            private List<Item> rewards;
+            private String endDesc;
+            
+            public Quest(String name, String desc, String precon, String wincon, List<Item> rewards, String endDesc) {
+                this.name = name;
+                this.desc = desc;
+                this.precon = precon;
+                this.wincon = wincon;
+                this.rewards = rewards;
+                this.endDesc = endDesc;
+            }
+        }
+        '''
+	}
+	
+	def generateGameClass(Model model) {
+		'''
+        import java.util.*;
+        
+        public class Game {
+        	public static void main(String[] args) {
 
+        	«FOR action: model.action»
+        	Action «action.name» = new Action("«action.name»","«action.command»", "«action.effect»");
+            «ENDFOR»
+            
+        	«FOR item : model.item»
+        	Item «item.name» = new Item("«item.name»", "«item.desc»", Arrays.asList(«IF item.actions.empty»«ELSE»«FOR a : item.actions SEPARATOR ', '»«a.name»«ENDFOR»«ENDIF»));
+        	«ENDFOR»
+        	
+        	// Create NPCs
+	        «FOR npc : model.npc»
+	        NPC «npc.name» = new NPC("«npc.name»", Arrays.asList(«IF npc.items.empty»«ELSE»«FOR i : npc.items SEPARATOR ', '»«i.name»«ENDFOR»«ENDIF»), Arrays.asList(«IF npc.actions.empty»«ELSE»«FOR a : npc.actions SEPARATOR ', '»«a.name»«ENDFOR»«ENDIF»));
+	        «ENDFOR»
+	        
+	        «FOR location : model.locations»
+	        Location «location.name» = new Location("«location.name»", Arrays.asList(«IF location.NPCs.empty»«ELSE»«FOR n : location.NPCs SEPARATOR ', '»«n.name»«ENDFOR»«ENDIF»), Arrays.asList(«IF location.items.empty»«ELSE»«FOR i : location.items SEPARATOR ', '»«i.name»«ENDFOR»«ENDIF»), new ArrayList<Location>());
+	        «ENDFOR»
+	        
+	        «FOR location : model.locations»
+	        «FOR conn : location.connections»
+	        «location.name».getConnections().add(«conn.name»);
+	        «ENDFOR»
+	        «ENDFOR»
+	        
+	        Map<String, Integer> playerAttributes = new HashMap<>();
+	        «FOR attr : model.player.attr»
+	        playerAttributes.put("«attr.name»", «attr.value»);
+	        «ENDFOR»
+	        
+	        Player player = new Player("«model.player.name»", Arrays.asList(«IF model.player.actions.empty»«ELSE»«FOR a : model.player.actions SEPARATOR ', '»«a.name»«ENDFOR»«ENDIF»), Arrays.asList(«IF model.player.items.empty»«ELSE»«FOR i : model.player.items SEPARATOR ', '»«i.name»«ENDFOR»«ENDIF»), playerAttributes);
+        	Story story = new Story("«model.story.name»", "«model.story.desc»", «model.story.startLocation.name»);
+        	
+        	
+        	System.out.println("Game");
+        	}
+        }
+		'''
 	}
 }

@@ -14,27 +14,27 @@ Model:
     
 	
 Story:
-	'Story' ':' name=ID 'Desc' ':' STRING 'Start' ':' startLocation=[Location];
+	'Story' ':' name=ID 'Desc' ':' desc=STRING 'Start' ':' startLocation=[Location];
 	
 Location:
-	'Location' name = ID 'NPCs' NPCs+=[NPC]* 'Items' Items+=[Item]* 'Connections' Connections+=[Location]*
+	'Location' name=ID 'NPCs' NPCs+=[NPC]* 'Items' Items+=[Item]* 'Connections' Connections+=[Location]*
 ;
 Player:
 	'Player' name=ID 'Actions' actions+=[Action]* 'Inventory' items+=[Item]* 'Attr' attr+=Attribute*;
 
 Attribute:
-	name=ID '=' INT;
+	name=ID '=' value=INT;
 
 Item:
-	'Item' name=ID 'Desc' STRING 'Actions' actions+=[Action]*; 
+	'Item' name=ID 'Desc' desc=STRING 'Actions' actions+=[Action]*; 
 	
 NPC:
 	'NPC' name=ID 'Inventory' Items+=[Item]* 'Actions' actions+=[Action]*;
 	
 Action:
-	'Action' name=ID 'command' ':' STRING 'effect' ':' STRING;
+	'Action' name=ID 'command' ':' command=STRING 'effect' ':' effect=STRING;
 	
 Quest:
-	name=ID 'Desc' STRING 'PreCon' STRING 'WinCon' STRING 'Rewards' Items+=[Item]* 'EndDesc' STRING
+	name=ID 'Desc' desc=STRING 'PreCon' precon=STRING 'WinCon' wincon=STRING 'Rewards' Items+=[Item]* 'EndDesc' enddesc=STRING
 ;	
 	
