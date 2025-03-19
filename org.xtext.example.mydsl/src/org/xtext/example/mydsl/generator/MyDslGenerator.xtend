@@ -7,235 +7,123 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.AbstractGenerator
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
-import org.xtext.example.mydsl.myDsl.Model
-import org.xtext.example.mydsl.myDsl.Story
-import org.xtext.example.mydsl.myDsl.Player
-import org.xtext.example.mydsl.myDsl.Location
-import org.xtext.example.mydsl.myDsl.NPC
-import org.xtext.example.mydsl.myDsl.Item
-import org.xtext.example.mydsl.myDsl.Action
-import org.xtext.example.mydsl.myDsl.Quest
-import org.xtext.example.mydsl.myDsl.Locations
-import org.xtext.example.mydsl.myDsl.NPCs
-import org.xtext.example.mydsl.myDsl.Items
-import org.xtext.example.mydsl.myDsl.Actions
-import org.xtext.example.mydsl.myDsl.Quests
+import org.xtext.example.mydsl.myDsl.*
+import java.util.List
+import org.eclipse.emf.ecore.EPackage
+import org.eclipse.emf.ecore.EClass
+import java.util.ArrayList
+import org.eclipse.emf.ecore.EAttribute
+import org.eclipse.emf.ecore.EReference
 
 /**
  * Generates code from your model files on save.
  */
 class MyDslGenerator extends AbstractGenerator {
 
+    static class FieldInfo {
+        String type
+        String name
+        boolean isCollection = false
+        String defaultInitializer = null
+        
+        new(String type, String name) {
+            this.type = type
+            this.name = name
+        }
+        
+        new(String type, String name, boolean isCollection, String defaultInitializer) {
+            this.type = type
+            this.name = name
+            this.isCollection = isCollection
+            this.defaultInitializer = defaultInitializer
+        }
+    }
+
     override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
-        val model = resource.allContents.filter(Model).head
-                
-        // Generate class definitions in the 'game' package
-        fsa.generateFile("game/Story.java", generateStoryClass)
-        fsa.generateFile("game/Player.java", generatePlayerClass)
-        fsa.generateFile("game/Location.java", generateLocationClass)
-        fsa.generateFile("game/NPC.java", generateNPCClass)
-        fsa.generateFile("game/Item.java", generateItemClass)
-        fsa.generateFile("game/Action.java", generateActionClass)
-        fsa.generateFile("game/Quest.java", generateQuestClass)
+    val model = resource.allContents.filter(Model).head
+    
+    // Access the generated metamodel package using the URI from your grammar
+    val packageNsURI = "http://www.xtext.org/example/mydsl/MyDsl"
+    val myDslPackage = EPackage.Registry.INSTANCE.getEPackage(packageNsURI)
         
-        // Generate the Game class with initialization code
-        fsa.generateFile("game/Game.java", generateGameClass(model))
+    // Get the entity classes from the package
+    val entities = #["Story", "Player", "Location", "NPC", "Item", "Action", "Quest", "Attribute"]
+    
+    for (entityName : entities) {
+        val eClass = myDslPackage.getEClassifier(entityName) as EClass
+        if (eClass !== null) {
+            var fields = extractFields(eClass)
+            
+            if (entityName == "Player") {
+                fields.add(new FieldInfo("Location", "currentLocation", false, null))
+            }
+            
+            fsa.generateFile('''game/«entityName».java''', generateClass(entityName, fields))
+        } else {
+            System.err.println("Warning: Could not find EClass for " + entityName)
+        }
     }
     
-    // Generate Story class
-    def generateStoryClass() {
-        '''
-        package game;
-        
-        public class Story {
-            private String title;
-            private String description;
-            private Location startLocation;
-        
-            public Story(String title, String description, Location startLocation) {
-                this.title = title;
-                this.description = description;
-                this.startLocation = startLocation;
-            }
-        
-            public String getTitle() { return title; }
-            public String getDescription() { return description; }
-            public Location getStartLocation() { return startLocation; }
-        }
-        '''
-    }
-    
-    // Generate Player class
-    def generatePlayerClass() {
-        '''
-        package game;
-        
-        import java.util.*;
-        
-        public class Player {
-            private String name;
-            private List<Action> actions;
-            private List<Item> inventory;
-            private Map<String, Integer> attributes;
-            private Location currentLocation;
-        
-            public Player(String name, List<Action> actions, List<Item> inventory,
-                          Map<String, Integer> attributes, Location currentLocation) {
-                this.name = name;
-                this.actions = actions != null ? actions : new ArrayList<>();
-                this.inventory = inventory != null ? inventory : new ArrayList<>();
-                this.attributes = attributes != null ? attributes : new HashMap<>();
-                this.currentLocation = currentLocation;
-            }
-        
-            public String getName() { return name; }
-            public List<Action> getActions() { return actions; }
-            public List<Item> getInventory() { return inventory; }
-            public Map<String, Integer> getAttributes() { return attributes; }
-            public Location getCurrentLocation() { return currentLocation; }
-            public void setCurrentLocation(Location location) { this.currentLocation = location; }
-        }
-        '''
-    }
-    
-    // Generate Location class
-    def generateLocationClass() {
-        '''
-        package game;
-        
-        import java.util.*;
-        
-        public class Location {
-            private String name;
-            private List<NPC> npcs;
-            private List<Item> items;
-            private List<Location> connections;
-        
-            public Location(String name, List<NPC> npcs, List<Item> items, List<Location> connections) {
-                this.name = name;
-                this.npcs = npcs != null ? npcs : new ArrayList<>();
-                this.items = items != null ? items : new ArrayList<>();
-                this.connections = connections != null ? connections : new ArrayList<>();
-            }
-        
-            public String getName() { return name; }
-            public List<NPC> getNpcs() { return npcs; }
-            public List<Item> getItems() { return items; }
-            public List<Location> getConnections() { return connections; }
-        
-            @Override
-            public String toString() { return name; }
-        }
-        '''
-    }
-    
-    // Generate NPC class
-    def generateNPCClass() {
-        '''
-        package game;
-        
-        import java.util.*;
-        
-        public class NPC {
-            private String name;
-            private List<Item> inventory;
-            private List<Action> actions;
-        
-            public NPC(String name, List<Item> inventory, List<Action> actions) {
-                this.name = name;
-                this.inventory = inventory != null ? inventory : new ArrayList<>();
-                this.actions = actions != null ? actions : new ArrayList<>();
-            }
-        
-            public String getName() { return name; }
-            public List<Item> getInventory() { return inventory; }
-            public List<Action> getActions() { return actions; }
-        }
-        '''
-    }
-    
-    // Generate Item class
-    def generateItemClass() {
-        '''
-        package game;
-        
-        import java.util.*;
-        
-        public class Item {
-            private String name;
-            private String description;
-            private List<Action> actions;
-        
-            public Item(String name, String description, List<Action> actions) {
-                this.name = name;
-                this.description = description;
-                this.actions = actions != null ? actions : new ArrayList<>();
-            }
-        
-            public String getName() { return name; }
-            public String getDescription() { return description; }
-            public List<Action> getActions() { return actions; }
-        }
-        '''
-    }
-    
-    // Generate Action class
-    def generateActionClass() {
-        '''
-        package game;
-        
-        public class Action {
-            private String name;
-            private String command;
-            private String effect;
-        
-            public Action(String name, String command, String effect) {
-                this.name = name;
-                this.command = command;
-                this.effect = effect;
-            }
-        
-            public String getName() { return name; }
-            public String getCommand() { return command; }
-            public String getEffect() { return effect; }
-        }
-        '''
-    }
-    
-    // Generate Quest class
-    def generateQuestClass() {
-        '''
-        package game;
-        
-        import java.util.*;
-        
-        public class Quest {
-            private String name;
-            private String description;
-            private String precondition;
-            private String winCondition;
-            private List<Item> rewards;
-            private String endDescription;
-        
-            public Quest(String name, String description, String precondition, 
-                        String winCondition, List<Item> rewards, String endDescription) {
-                this.name = name;
-                this.description = description;
-                this.precondition = precondition;
-                this.winCondition = winCondition;
-                this.rewards = rewards != null ? rewards : new ArrayList<>();
-                this.endDescription = endDescription;
-            }
-        
-            public String getName() { return name; }
-            public String getDescription() { return description; }
-            public String getPrecondition() { return precondition; }
-            public String getWinCondition() { return winCondition; }
-            public List<Item> getRewards() { return rewards; }
-            public String getEndDescription() { return endDescription; }
-        }
-        '''
-    }
+    // Generate Game class
+    fsa.generateFile("game/Game.java", generateGameClass(model))
+	}
+		
+	def List<FieldInfo> extractFields(EClass eClass) {
+	    val fields = new ArrayList<FieldInfo>()
+	    
+	    // Process all structural features (attributes and references)
+	    eClass.EAllStructuralFeatures.forEach[feature |
+	        val name = feature.name
+	        var type = ""
+	        var isCollection = feature.many
+	        var defaultInitializer = if (isCollection) "ArrayList" else null
+	        
+	        if (feature instanceof EAttribute) {
+	            // Handle attributes (primitive types)
+	            switch (feature.EAttributeType.name) {
+	                case "EString": type = "String"
+	                case "EInt": type = "Integer"
+	                case "EBoolean": type = "Boolean"
+	                default: type = "String" // fallback
+	            }
+	        } else if (feature instanceof EReference) {
+	            // Handle references (object types)
+	            type = feature.EReferenceType.name
+	            if (isCollection) {
+	                type = "List<" + type + ">"
+	            }
+	        }
+	        
+	        fields.add(new FieldInfo(type, name, isCollection, defaultInitializer))
+	    ]
+	    
+	    return fields
+	}
+    def generateClass(String className, List<FieldInfo> fields) {
+	    '''
+	    package game;
+	    
+	    import java.util.*;
+	    
+	    public class «className» {
+	        «FOR field : fields»
+	        private «field.type» «field.name»;
+	        «ENDFOR»
+	        
+	        public «className»(«fields.map[type + " " + name].join(", ")») {
+	            «FOR field : fields»
+	            this.«field.name» = «field.name»«IF field.isCollection» != null ? «field.name» : new «field.defaultInitializer»<>()«ENDIF»;
+	            «ENDFOR»
+	        }
+	        
+	        «FOR field : fields»
+	        public «field.type» get«field.name.toFirstUpper»() { return «field.name»; }
+	        public void set«field.name.toFirstUpper»(«field.type» «field.name») { this.«field.name» = «field.name»; }
+	        «ENDFOR»
+	    }
+	    '''
+	}
+	
     
     def generateGameClass(Model model) {
         '''
@@ -248,43 +136,43 @@ class MyDslGenerator extends AbstractGenerator {
             private static Scanner scanner;
             private static Player player;
             private static boolean playing;
-            private static final List<String> COMMANDS_REQUIRING_ARGUMENT = 
-                Arrays.asList("move", "pickup", "drop", "use", "eat", "examine");
+            private static final List<String> COMMANDS_REQUIRING_ARGUMENT =
+                    Arrays.asList("move", "pickup", "drop", "use", "eat", "examine");
             private static Map<String, Location> locations = new HashMap<>();
             private static Map<String, Item> items = new HashMap<>();
             private static Map<String, NPC> npcs = new HashMap<>();
             private static Map<String, Action> actions = new HashMap<>();
-            
+        
             public static void main(String[] args) {
                 initialize();
                 gameLoop();
                 scanner.close();
                 System.out.println("Thanks for playing!");
             }
-            
+        
             private static void initialize() {
                 createWorldAndPlayer();
                 scanner = new Scanner(System.in);
                 playing = true;
-                
-                System.out.println("Welcome to the game, " + player.getName() + 
-                    "! You are at " + player.getCurrentLocation().getName());
+        
+                System.out.println("Welcome to the game, " + player.getName() +
+                        "! You are at " + player.getCurrentLocation().getName());
                 System.out.println("You can go to: " + getConnectionNames(player.getCurrentLocation()));
                 System.out.println("You have: " + getItemNames(player.getInventory()));
             }
-            
+        
             private static void createWorldAndPlayer() {
                 // Create Actions
                 «FOR actionsGroup : model.elem.filter(Actions)»
                     «FOR action : actionsGroup.action»
-                actions.put("«action.name»", new Action("«action.name»", "«action.command»", "«action.effect»"));
+                    actions.put("«action.name»", new Action("«action.name»", "«action.command»", "«action.effect»"));
                     «ENDFOR»
                 «ENDFOR»
                 
                 // Create Items
                 «FOR itemsGroup : model.elem.filter(Items)»
                     «FOR item : itemsGroup.item»
-                items.put("«item.name»", new Item("«item.name»", "«item.desc»", 
+                    items.put("«item.name»", new Item("«item.name»", "«item.desc»", 
                     Arrays.asList(«IF item.actions.empty»«ELSE»«FOR a : item.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
                     «ENDFOR»
                 «ENDFOR»
@@ -292,7 +180,7 @@ class MyDslGenerator extends AbstractGenerator {
                 // Create NPCs
                 «FOR npcsGroup : model.elem.filter(NPCs)»
                     «FOR npc : npcsGroup.npc»
-                npcs.put("«npc.name»", new NPC("«npc.name»", 
+                    npcs.put("«npc.name»", new NPC("«npc.name»", 
                     Arrays.asList(«IF npc.items.empty»«ELSE»«FOR i : npc.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»), 
                     Arrays.asList(«IF npc.actions.empty»«ELSE»«FOR a : npc.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
                     «ENDFOR»
@@ -301,9 +189,9 @@ class MyDslGenerator extends AbstractGenerator {
                 // Create Locations
                 «FOR locationsGroup : model.elem.filter(Locations)»
                     «FOR location : locationsGroup.locations»
-                locations.put("«location.name»", new Location("«location.name»", 
-                    Arrays.asList(«IF location.NPCs.empty»«ELSE»«FOR n : location.NPCs SEPARATOR ', '»npcs.get("«n.name»")«ENDFOR»«ENDIF»), 
-                    Arrays.asList(«IF location.items.empty»«ELSE»«FOR i : location.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»), 
+                    locations.put("«location.name»", new Location("«location.name»", 
+                    new ArrayList<>(Arrays.asList(«IF location.NPCs.empty»«ELSE»«FOR n : location.NPCs SEPARATOR ', '»npcs.get("«n.name»")«ENDFOR»«ENDIF»)), 
+                    new ArrayList<>(Arrays.asList(«IF location.items.empty»«ELSE»«FOR i : location.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)), 
                     new ArrayList<>()));
                     «ENDFOR»
                 «ENDFOR»
@@ -312,32 +200,31 @@ class MyDslGenerator extends AbstractGenerator {
                 «FOR locationsGroup : model.elem.filter(Locations)»
                     «FOR location : locationsGroup.locations»
                         «FOR conn : location.connections»
-                locations.get("«location.name»").getConnections().add(locations.get("«conn.name»"));
+                        locations.get("«location.name»").getConnections().add(locations.get("«conn.name»"));
                         «ENDFOR»
                     «ENDFOR»
                 «ENDFOR»
                 
-                // Create Player
                 «val player = model.elem.filter(Player).head»
-                Map<String, Integer> playerAttributes = new HashMap<>();
-                «FOR attr : player?.attr ?: emptyList»
-                playerAttributes.put("«attr.name»", «attr.value»);
-                «ENDFOR»
-                
+                List<Attribute> playerAttributes = new ArrayList<>();
+    		   	«FOR attr : player?.attributes ?: emptyList»
+						playerAttributes.add(new Attribute("«attr.name»", «attr.value»));
+    	        «ENDFOR»
+      
                 player = new Player("«player?.name ?: "DefaultPlayer"»",
-                    Arrays.asList(«IF player?.actions.empty»«ELSE»«FOR a : player?.actions ?: emptyList SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»),
-                    Arrays.asList(«IF player?.items.empty»«ELSE»«FOR i : player?.items ?: emptyList SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»),
-                    playerAttributes,
-                    locations.get("«model.elem.filter(Story).head?.startLocation?.name ?: ""»"));
-                    
+                new ArrayList<>(Arrays.asList(«IF player?.actions.empty»«ELSE»«FOR a : player?.actions ?: emptyList SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)),
+                new ArrayList<>(Arrays.asList(«IF player?.inventory.empty»«ELSE»«FOR i : player?.inventory ?: emptyList SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)),
+                playerAttributes,
+                locations.get("«model.elem.filter(Story).head?.startLocation?.name ?: ""»"));                    
                 // Create Story
                 «val story = model.elem.filter(Story).head»
                 Story story = new Story("«story?.name ?: ""»", 
                     "«story?.desc ?: ""»", 
-                    locations.get("«story?.startLocation?.name ?: ""»"));
+                locations.get("«story?.startLocation?.name ?: ""»"));
             }
-            
-            // Rest of the game logic remains largely the same
+
+        
+            // Rest of the game logic (unchanged)
             private static void gameLoop() {
                 while (playing) {
                     System.out.print("> ");
@@ -349,25 +236,25 @@ class MyDslGenerator extends AbstractGenerator {
                     }
                 }
             }
-            
+        
             private static boolean validateInput(String[] tokens) {
                 if (tokens.length == 0 || tokens[0].isEmpty()) {
                     System.out.println("Please enter a command.");
                     return false;
                 }
         
-                if (COMMANDS_REQUIRING_ARGUMENT.contains(tokens[0]) && 
-                    (tokens.length < 2 || tokens[1].isEmpty())) {
+                if (COMMANDS_REQUIRING_ARGUMENT.contains(tokens[0]) &&
+                        (tokens.length < 2 || tokens[1].isEmpty())) {
                     System.out.println("The '" + tokens[0] + "' command requires a target.");
                     return false;
                 }
                 return true;
             }
-            
+        
             private static void processCommand(String[] tokens) {
                 String command = tokens[0];
                 String argument = tokens.length > 1 ? tokens[1] : "";
-                
+        
                 switch (command) {
                     case "move": handleMoveCommand(argument); break;
                     case "look": handleLookCommand(); break;
@@ -381,7 +268,7 @@ class MyDslGenerator extends AbstractGenerator {
                     default: System.out.println("Unknown command. Type 'help' for a list of commands.");
                 }
             }
-            
+        
             private static void handleMoveCommand(String locationName) {
                 List<Location> connections = player.getCurrentLocation().getConnections();
                 for (Location location : connections) {
@@ -394,65 +281,73 @@ class MyDslGenerator extends AbstractGenerator {
                 }
                 System.out.println("You can't go to " + locationName + " from here.");
             }
-            
+        
             private static void handleLookCommand() {
                 describeLocation(player.getCurrentLocation());
             }
-            
+        
             private static void describeLocation(Location location) {
                 System.out.println("You are at " + location.getName());
                 System.out.println("You see: " + getItemNames(location.getItems()));
-                if (!location.getNpcs().isEmpty()) {
-                    System.out.println("People here: " + getNpcNames(location.getNpcs()));
+                if (!location.getNPCs().isEmpty()) {
+                    System.out.println("People here: " + getNpcNames(location.getNPCs()));
                 }
                 System.out.println("You can go to: " + getConnectionNames(location));
             }
-            
+        
             private static void handlePickupCommand(String itemName) {
-                List<Item> items = player.getCurrentLocation().getItems();
-                for (Item item : items) {
+                List<Item> locationItems = player.getCurrentLocation().getItems();
+                Iterator<Item> iterator = locationItems.iterator();
+        
+                while (iterator.hasNext()) {
+                    Item item = iterator.next();
                     if (item.getName().equalsIgnoreCase(itemName)) {
                         player.getInventory().add(item);
-                        items.remove(item);
+                        iterator.remove(); // Safely remove using Iterator
                         System.out.println("You picked up the " + item.getName());
                         return;
                     }
                 }
                 System.out.println("There is no " + itemName + " here.");
             }
-            
+        
             private static void handleDropCommand(String itemName) {
                 List<Item> inventory = player.getInventory();
-                for (Item item : inventory) {
+                Iterator<Item> iterator = inventory.iterator();
+        
+                while (iterator.hasNext()) {
+                    Item item = iterator.next();
                     if (item.getName().equalsIgnoreCase(itemName)) {
                         player.getCurrentLocation().getItems().add(item);
-                        inventory.remove(item);
+                        iterator.remove(); // Safely remove using Iterator
                         System.out.println("You dropped the " + item.getName());
                         return;
                     }
                 }
                 System.out.println("You don't have a " + itemName + ".");
             }
-            
+        
             private static void handleInventoryCommand() {
                 List<Item> inventory = player.getInventory();
-                System.out.println("Your inventory: " + 
-                    (inventory.isEmpty() ? "nothing" : getItemNames(inventory)));
-                System.out.println("Health: " + player.getAttributes().getOrDefault("health", 0) +
-                        ", XP: " + player.getAttributes().getOrDefault("xp", 0));
+                System.out.println("Your inventory: " +
+                        (inventory.isEmpty() ? "nothing" : getItemNames(inventory)));
+                System.out.println("Attributes: " + getAttributesString());
             }
-            
+        
             private static void handleEatCommand(String itemName) {
-                for (Item item : player.getInventory()) {
+                Iterator<Item> iterator = player.getInventory().iterator();
+        
+                while (iterator.hasNext()) {
+                    Item item = iterator.next();
                     if (item.getName().equalsIgnoreCase(itemName)) {
                         if (item.getActions().stream().anyMatch(a -> a.getName().equals("eat"))) {
                             int healthBoost = 1;
-                            int currentHealth = player.getAttributes().getOrDefault("health", 0);
-                            player.getAttributes().put("health", currentHealth + healthBoost);
-                            player.getInventory().remove(item);
-                            System.out.println("You eat the " + item.getName() + 
-                                " and gain " + healthBoost + " health. " +
-                                "Health: " + player.getAttributes().get("health"));
+                            int currentValue = getPlayerAttribute("health");
+                            setPlayerAttribute("health", currentValue + healthBoost);
+                            iterator.remove(); // Safely remove using Iterator
+                            System.out.println("You eat the " + item.getName() +
+                                    " and gain " + healthBoost + " health. " +
+                                    "Health: " + getPlayerAttribute("health"));
                             return;
                         } else {
                             System.out.println("You can't eat the " + item.getName() + ".");
@@ -462,38 +357,38 @@ class MyDslGenerator extends AbstractGenerator {
                 }
                 System.out.println("You don't have a " + itemName + ".");
             }
-            
+        
             private static void handleExamineCommand(String target) {
                 for (Item item : player.getInventory()) {
                     if (item.getName().equalsIgnoreCase(target)) {
-                        System.out.println(item.getDescription());
+                        System.out.println(item.getDesc());
                         return;
                     }
                 }
-                
+        
                 for (Item item : player.getCurrentLocation().getItems()) {
                     if (item.getName().equalsIgnoreCase(target)) {
-                        System.out.println(item.getDescription());
+                        System.out.println(item.getDesc());
                         return;
                     }
                 }
-                
-                for (NPC npc : player.getCurrentLocation().getNpcs()) {
+        
+                for (NPC npc : player.getCurrentLocation().getNPCs()) {
                     if (npc.getName().equalsIgnoreCase(target)) {
                         System.out.println("This is " + npc.getName() + ".");
                         return;
                     }
                 }
-                
+        
                 if (target.equalsIgnoreCase(player.getCurrentLocation().getName()) ||
                         target.equals("here") || target.equals("around")) {
                     handleLookCommand();
                     return;
                 }
-                
+        
                 System.out.println("You don't see any " + target + " here.");
             }
-            
+        
             private static void handleHelpCommand() {
                 System.out.println("Available commands:\n" +
                         "  look - Look around\n" +
@@ -506,26 +401,51 @@ class MyDslGenerator extends AbstractGenerator {
                         "  help - Show this help message\n" +
                         "  exit or quit - End the game");
             }
-            
+        
             private static String getConnectionNames(Location location) {
                 List<Location> connections = location.getConnections();
-                return connections.isEmpty() ? "nowhere" : 
-                    connections.stream()
-                        .map(Location::getName)
-                        .collect(Collectors.joining(", "));
+                return connections.isEmpty() ? "nowhere" :
+                        connections.stream()
+                                .map(Location::getName)
+                                .collect(Collectors.joining(", "));
             }
-            
+        
             private static String getItemNames(List<Item> items) {
-                return items.isEmpty() ? "nothing" : 
-                    items.stream()
-                        .map(Item::getName)
-                        .collect(Collectors.joining(", "));
+                return items.isEmpty() ? "nothing" :
+                        items.stream()
+                                .map(Item::getName)
+                                .collect(Collectors.joining(", "));
             }
-            
+        
             private static String getNpcNames(List<NPC> npcs) {
                 return npcs.stream()
-                    .map(NPC::getName)
-                    .collect(Collectors.joining(", "));
+                        .map(NPC::getName)
+                        .collect(Collectors.joining(", "));
+            }
+            private static int getPlayerAttribute(String attributeName) {
+                return player.getAttributes().stream()
+                        .filter(attr -> attr.getName().equalsIgnoreCase(attributeName))
+                        .findFirst()
+                        .map(Attribute::getValue)
+                        .orElse(0);
+            }
+        
+            private static void setPlayerAttribute(String attributeName, int value) {
+                Attribute attribute = player.getAttributes().stream()
+                        .filter(attr -> attr.getName().equalsIgnoreCase(attributeName))
+                        .findFirst()
+                        .orElse(null);
+        
+                if (attribute != null) {
+                    attribute.setValue(value);
+                } else {
+                    player.getAttributes().add(new Attribute(attributeName, value));
+                }
+            }
+            private static String getAttributesString() {
+                return player.getAttributes().stream()
+                        .map(attr -> attr.getName() + ": " + attr.getValue())
+                        .collect(Collectors.joining(", "));
             }
         }
         '''

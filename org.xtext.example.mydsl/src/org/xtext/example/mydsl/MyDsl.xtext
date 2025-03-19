@@ -33,7 +33,7 @@ Location:
 	'Location' name=ID 'NPCs' NPCs+=[NPC]* 'Items' Items+=[Item]* 'Connections' Connections+=[Location]*
 ;
 Player:
-	'Player' name=ID 'Actions' actions+=[Action]* 'Inventory' Items+=[Item]* 'Attr' attr+=Attribute*;
+	'Player' name=ID 'Actions' actions+=[Action]* 'Inventory' inventory+=[Item]* 'Attributes' attributes+=Attribute*;
 
 Attribute:
 	name=ID '=' value=INT;
