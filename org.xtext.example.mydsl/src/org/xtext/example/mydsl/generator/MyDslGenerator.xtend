@@ -15,6 +15,7 @@ import java.util.ArrayList
 import org.eclipse.emf.ecore.EAttribute
 import org.eclipse.emf.ecore.EReference
 
+
 /**
  * Generates code from your model files on save.
  */
@@ -57,6 +58,16 @@ class MyDslGenerator extends AbstractGenerator {
             if (entityName == "Player") {
                 fields.add(new FieldInfo("Location", "currentLocation", false, null))
             }
+            if (entityName == "Attribute") {
+                    val expFieldInfo = fields.findFirst[name == "exp" ] // Find by metamodel name 'exp'
+
+                    if (expFieldInfo !== null) {
+                        fields.remove(expFieldInfo)
+                    } else {
+                         System.err.println("Warning: Could not find 'exp' field to replace in Attribute fields list.");
+                    }
+                    fields.add(new FieldInfo("Integer", "value", false, null))
+                }
             
             fsa.generateFile('''game/«entityName».java''', generateClass(entityName, fields))
         } else {
@@ -124,6 +135,29 @@ class MyDslGenerator extends AbstractGenerator {
 	    '''
 	}
 	
+	def int evaluate(Exp expression) {
+        switch expression {
+            Number: expression.value
+            Ref:    evaluate(expression.value.exp) // FIXED: Use .value here (based on grammar {Ref} value = ...)
+            Plus:   evaluate(expression.left) + evaluate(expression.right)
+            Minus:  evaluate(expression.left) - evaluate(expression.right)
+            Mul:    evaluate(expression.left) * evaluate(expression.right)
+            Div:    {
+                        val rightVal = evaluate(expression.right)
+                        if (rightVal == 0) {
+                            println("Warning: Division by zero encountered during generation (returning 0).")
+                            0
+                        } else {
+                             evaluate(expression.left) / rightVal
+                        }
+                    }
+            ParenthesizedExpression: evaluate(expression.inner)
+            default: {
+                     println("Error: Unknown expression type encountered during evaluation: " + expression.eClass.name)
+                     0
+                }
+        }
+    }
     
     def generateGameClass(Model model) {
         '''
@@ -160,7 +194,8 @@ class MyDslGenerator extends AbstractGenerator {
                 System.out.println("You can go to: " + getConnectionNames(player.getCurrentLocation()));
                 System.out.println("You have: " + getItemNames(player.getInventory()));
             }
-        
+       
+        	
             private static void createWorldAndPlayer() {
                 // Create Actions
                 «FOR actionsGroup : model.elem.filter(Actions)»
@@ -207,9 +242,15 @@ class MyDslGenerator extends AbstractGenerator {
                 
                 «val player = model.elem.filter(Player).head»
                 List<Attribute> playerAttributes = new ArrayList<>();
-    		   	«FOR attr : player?.attributes ?: emptyList»
-						playerAttributes.add(new Attribute("«attr.name»", «attr.value»));
-    	        «ENDFOR»
+                
+                «IF player !== null»
+                    «FOR attr : player.attributes» 
+                        «val evaluatedValue = evaluate(attr.exp)» 
+                        playerAttributes.add(new Attribute("«attr.name»", «evaluatedValue»)); 
+                    «ENDFOR»
+                «ENDIF»
+
+                
       
                 player = new Player("«player?.name ?: "DefaultPlayer"»",
                 new ArrayList<>(Arrays.asList(«IF player?.actions.empty»«ELSE»«FOR a : player?.actions ?: emptyList SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)),
