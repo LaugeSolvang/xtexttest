@@ -7,9 +7,9 @@ Model:
     ;
     
 Elem:
-	Story | Player | Locations | NPCs | Actions | Quests | Items
+	Story | Player | Locations | NPCs | Actions | Quests | Items 
 ;
-	
+
 Locations:
 	'Locations' locations+=Location+
 ;
@@ -36,7 +36,7 @@ Player:
 	'Player' name=ID 'Actions' actions+=[Action]* 'Inventory' inventory+=[Item]* 'Attributes' attributes+=Attribute*;
 
 Attribute:
-	name=ID '=' value=INT;
+	name=ID '=' exp=Exp;
 
 Item:
 	'Item' name=ID 'Desc' desc=STRING 'Actions' actions+=[Action]*; 
@@ -50,4 +50,37 @@ Action:
 Quest:
 	name=ID 'Desc' desc=STRING 'PreCon' precon=STRING 'WinCon' wincon=STRING 'Rewards' Items+=[Item]* 'EndDesc' enddesc=STRING
 ;	
+
+
+Exp returns Exp:
+    PlusOrMinus
+;
+
+PlusOrMinus returns Exp:
+    MulOrDiv(
+            {Plus.left=current} '+' right=MulOrDiv |
+            {Minus.left=current} '-'right=MulOrDiv
+        )* 
+;
+
+MulOrDiv returns Exp:
+    Primary(
+            {Mul.left=current} '*' right=Primary    |
+            {Div.left=current} '/' right=Primary
+        )*
+;
+
+Primary returns Exp:
+    Atomic | Parenthesis
+;
+
+Parenthesis returns Exp:
+    {ParenthesizedExpression} '(' inner=Exp ')'
+;
+
+Atomic returns Exp:
+ {Number} value = INT  | {Ref} value = [Attribute|ID]
+;
+
+
 	
