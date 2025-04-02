@@ -76,7 +76,7 @@ class MyDslGenerator extends AbstractGenerator {
     }
     
     // Generate Game class
-    fsa.generateFile("game/Game.java", generateGameClass(model))
+    fsa.generateFile("game/GameInitializer.java", generateGameInitializerClass(model))
 	}
 		
 	def List<FieldInfo> extractFields(EClass eClass) {
@@ -159,335 +159,94 @@ class MyDslGenerator extends AbstractGenerator {
         }
     }
     
-    def generateGameClass(Model model) {
+    def generateGameInitializerClass(Model model) {
         '''
         package game;
         
         import java.util.*;
         import java.util.stream.Collectors;
         
-        public class Game {
-            private static Scanner scanner;
-            private static Player player;
-            private static boolean playing;
-            private static final List<String> COMMANDS_REQUIRING_ARGUMENT =
-                    Arrays.asList("move", "pickup", "drop", "use", "eat", "examine");
-            private static Map<String, Location> locations = new HashMap<>();
-            private static Map<String, Item> items = new HashMap<>();
-            private static Map<String, NPC> npcs = new HashMap<>();
-            private static Map<String, Action> actions = new HashMap<>();
-        
-            public static void main(String[] args) {
-                initialize();
-                gameLoop();
-                scanner.close();
-                System.out.println("Thanks for playing!");
-            }
-        
-            private static void initialize() {
-                createWorldAndPlayer();
-                scanner = new Scanner(System.in);
-                playing = true;
-        
-                System.out.println("Welcome to the game, " + player.getName() +
-                        "! You are at " + player.getCurrentLocation().getName());
-                System.out.println("You can go to: " + getConnectionNames(player.getCurrentLocation()));
-                System.out.println("You have: " + getItemNames(player.getInventory()));
-            }
-       
+        public class GameInitializer {
+        	private static Map<String, Location> locations = new HashMap<>();
+        	    private static Map<String, Item> items = new HashMap<>();
+        	    private static Map<String, NPC> npcs = new HashMap<>();
+        	    private static Map<String, Action> actions = new HashMap<>();
+        	    private static Player player;
+        	    private static Story story;
+        	public static void initializeWorld() {
+        	                // Create Actions
+        	                «FOR actionsGroup : model.elem.filter(Actions)»
+        	                    «FOR action : actionsGroup.action»
+        	                    actions.put("«action.name»", new Action("«action.name»", "«action.command»", "«action.effect»"));
+        	                    «ENDFOR»
+        	                «ENDFOR»
+        	                
+        	                // Create Items
+        	                «FOR itemsGroup : model.elem.filter(Items)»
+        	                    «FOR item : itemsGroup.item»
+        	                    items.put("«item.name»", new Item("«item.name»", "«item.desc»", 
+        	                    Arrays.asList(«IF item.actions.empty»«ELSE»«FOR a : item.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
+        	                    «ENDFOR»
+        	                «ENDFOR»
+        	                
+        	                // Create NPCs
+        	                «FOR npcsGroup : model.elem.filter(NPCs)»
+        	                    «FOR npc : npcsGroup.npc»
+        	                    npcs.put("«npc.name»", new NPC("«npc.name»", 
+        	                    Arrays.asList(«IF npc.items.empty»«ELSE»«FOR i : npc.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»), 
+        	                    Arrays.asList(«IF npc.actions.empty»«ELSE»«FOR a : npc.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
+        	                    «ENDFOR»
+        	                «ENDFOR»
+        	                
+        	                // Create Locations
+        	                «FOR locationsGroup : model.elem.filter(Locations)»
+        	                    «FOR location : locationsGroup.locations»
+        	                    locations.put("«location.name»", new Location("«location.name»", 
+        	                    new ArrayList<>(Arrays.asList(«IF location.NPCs.empty»«ELSE»«FOR n : location.NPCs SEPARATOR ', '»npcs.get("«n.name»")«ENDFOR»«ENDIF»)), 
+        	                    new ArrayList<>(Arrays.asList(«IF location.items.empty»«ELSE»«FOR i : location.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)), 
+        	                    new ArrayList<>()));
+        	                    «ENDFOR»
+        	                «ENDFOR»
+        	                
+        	                // Set up location connections
+        	                «FOR locationsGroup : model.elem.filter(Locations)»
+        	                    «FOR location : locationsGroup.locations»
+        	                        «FOR conn : location.connections»
+        	                        locations.get("«location.name»").getConnections().add(locations.get("«conn.name»"));
+        	                        «ENDFOR»
+        	                    «ENDFOR»
+        	                «ENDFOR»
+        	                
+        	                «val player = model.elem.filter(Player).head»
+        	                List<Attribute> playerAttributes = new ArrayList<>();
+        	                
+        	                «IF player !== null»
+        	                    «FOR attr : player.attributes» 
+        	                        «val evaluatedValue = evaluate(attr.exp)» 
+        	                        playerAttributes.add(new Attribute("«attr.name»", «evaluatedValue»)); 
+        	                    «ENDFOR»
+        	                «ENDIF»
         	
-            private static void createWorldAndPlayer() {
-                // Create Actions
-                «FOR actionsGroup : model.elem.filter(Actions)»
-                    «FOR action : actionsGroup.action»
-                    actions.put("«action.name»", new Action("«action.name»", "«action.command»", "«action.effect»"));
-                    «ENDFOR»
-                «ENDFOR»
-                
-                // Create Items
-                «FOR itemsGroup : model.elem.filter(Items)»
-                    «FOR item : itemsGroup.item»
-                    items.put("«item.name»", new Item("«item.name»", "«item.desc»", 
-                    Arrays.asList(«IF item.actions.empty»«ELSE»«FOR a : item.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
-                    «ENDFOR»
-                «ENDFOR»
-                
-                // Create NPCs
-                «FOR npcsGroup : model.elem.filter(NPCs)»
-                    «FOR npc : npcsGroup.npc»
-                    npcs.put("«npc.name»", new NPC("«npc.name»", 
-                    Arrays.asList(«IF npc.items.empty»«ELSE»«FOR i : npc.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»), 
-                    Arrays.asList(«IF npc.actions.empty»«ELSE»«FOR a : npc.actions SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)));
-                    «ENDFOR»
-                «ENDFOR»
-                
-                // Create Locations
-                «FOR locationsGroup : model.elem.filter(Locations)»
-                    «FOR location : locationsGroup.locations»
-                    locations.put("«location.name»", new Location("«location.name»", 
-                    new ArrayList<>(Arrays.asList(«IF location.NPCs.empty»«ELSE»«FOR n : location.NPCs SEPARATOR ', '»npcs.get("«n.name»")«ENDFOR»«ENDIF»)), 
-                    new ArrayList<>(Arrays.asList(«IF location.items.empty»«ELSE»«FOR i : location.items SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)), 
-                    new ArrayList<>()));
-                    «ENDFOR»
-                «ENDFOR»
-                
-                // Set up location connections
-                «FOR locationsGroup : model.elem.filter(Locations)»
-                    «FOR location : locationsGroup.locations»
-                        «FOR conn : location.connections»
-                        locations.get("«location.name»").getConnections().add(locations.get("«conn.name»"));
-                        «ENDFOR»
-                    «ENDFOR»
-                «ENDFOR»
-                
-                «val player = model.elem.filter(Player).head»
-                List<Attribute> playerAttributes = new ArrayList<>();
-                
-                «IF player !== null»
-                    «FOR attr : player.attributes» 
-                        «val evaluatedValue = evaluate(attr.exp)» 
-                        playerAttributes.add(new Attribute("«attr.name»", «evaluatedValue»)); 
-                    «ENDFOR»
-                «ENDIF»
-
-                
-      
-                player = new Player("«player?.name ?: "DefaultPlayer"»",
-                new ArrayList<>(Arrays.asList(«IF player?.actions.empty»«ELSE»«FOR a : player?.actions ?: emptyList SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)),
-                new ArrayList<>(Arrays.asList(«IF player?.inventory.empty»«ELSE»«FOR i : player?.inventory ?: emptyList SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)),
-                playerAttributes,
-                locations.get("«model.elem.filter(Story).head?.startLocation?.name ?: ""»"));                    
-                // Create Story
-                «val story = model.elem.filter(Story).head»
-                Story story = new Story("«story?.name ?: ""»", 
-                    "«story?.desc ?: ""»", 
-                locations.get("«story?.startLocation?.name ?: ""»"));
-            }
-
-        
-            // Rest of the game logic (unchanged)
-            private static void gameLoop() {
-                while (playing) {
-                    System.out.print("> ");
-                    String input = scanner.nextLine().trim().toLowerCase();
-                    String[] tokens = input.split(" ", 2);
-        
-                    if (validateInput(tokens)) {
-                        processCommand(tokens);
-                    }
-                }
-            }
-        
-            private static boolean validateInput(String[] tokens) {
-                if (tokens.length == 0 || tokens[0].isEmpty()) {
-                    System.out.println("Please enter a command.");
-                    return false;
-                }
-        
-                if (COMMANDS_REQUIRING_ARGUMENT.contains(tokens[0]) &&
-                        (tokens.length < 2 || tokens[1].isEmpty())) {
-                    System.out.println("The '" + tokens[0] + "' command requires a target.");
-                    return false;
-                }
-                return true;
-            }
-        
-            private static void processCommand(String[] tokens) {
-                String command = tokens[0];
-                String argument = tokens.length > 1 ? tokens[1] : "";
-        
-                switch (command) {
-                    case "move": handleMoveCommand(argument); break;
-                    case "look": handleLookCommand(); break;
-                    case "pickup": handlePickupCommand(argument); break;
-                    case "drop": handleDropCommand(argument); break;
-                    case "inventory": case "inv": handleInventoryCommand(); break;
-                    case "eat": handleEatCommand(argument); break;
-                    case "examine": handleExamineCommand(argument); break;
-                    case "help": handleHelpCommand(); break;
-                    case "exit": case "quit": playing = false; break;
-                    default: System.out.println("Unknown command. Type 'help' for a list of commands.");
-                }
-            }
-        
-            private static void handleMoveCommand(String locationName) {
-                List<Location> connections = player.getCurrentLocation().getConnections();
-                for (Location location : connections) {
-                    if (location.getName().equalsIgnoreCase(locationName)) {
-                        player.setCurrentLocation(location);
-                        System.out.println("You move to " + location.getName());
-                        describeLocation(location);
-                        return;
-                    }
-                }
-                System.out.println("You can't go to " + locationName + " from here.");
-            }
-        
-            private static void handleLookCommand() {
-                describeLocation(player.getCurrentLocation());
-            }
-        
-            private static void describeLocation(Location location) {
-                System.out.println("You are at " + location.getName());
-                System.out.println("You see: " + getItemNames(location.getItems()));
-                if (!location.getNPCs().isEmpty()) {
-                    System.out.println("People here: " + getNpcNames(location.getNPCs()));
-                }
-                System.out.println("You can go to: " + getConnectionNames(location));
-            }
-        
-            private static void handlePickupCommand(String itemName) {
-                List<Item> locationItems = player.getCurrentLocation().getItems();
-                Iterator<Item> iterator = locationItems.iterator();
-        
-                while (iterator.hasNext()) {
-                    Item item = iterator.next();
-                    if (item.getName().equalsIgnoreCase(itemName)) {
-                        player.getInventory().add(item);
-                        iterator.remove(); // Safely remove using Iterator
-                        System.out.println("You picked up the " + item.getName());
-                        return;
-                    }
-                }
-                System.out.println("There is no " + itemName + " here.");
-            }
-        
-            private static void handleDropCommand(String itemName) {
-                List<Item> inventory = player.getInventory();
-                Iterator<Item> iterator = inventory.iterator();
-        
-                while (iterator.hasNext()) {
-                    Item item = iterator.next();
-                    if (item.getName().equalsIgnoreCase(itemName)) {
-                        player.getCurrentLocation().getItems().add(item);
-                        iterator.remove(); // Safely remove using Iterator
-                        System.out.println("You dropped the " + item.getName());
-                        return;
-                    }
-                }
-                System.out.println("You don't have a " + itemName + ".");
-            }
-        
-            private static void handleInventoryCommand() {
-                List<Item> inventory = player.getInventory();
-                System.out.println("Your inventory: " +
-                        (inventory.isEmpty() ? "nothing" : getItemNames(inventory)));
-                System.out.println("Attributes: " + getAttributesString());
-            }
-        
-            private static void handleEatCommand(String itemName) {
-                Iterator<Item> iterator = player.getInventory().iterator();
-        
-                while (iterator.hasNext()) {
-                    Item item = iterator.next();
-                    if (item.getName().equalsIgnoreCase(itemName)) {
-                        if (item.getActions().stream().anyMatch(a -> a.getName().equals("eat"))) {
-                            int healthBoost = 1;
-                            int currentValue = getPlayerAttribute("health");
-                            setPlayerAttribute("health", currentValue + healthBoost);
-                            iterator.remove(); // Safely remove using Iterator
-                            System.out.println("You eat the " + item.getName() +
-                                    " and gain " + healthBoost + " health. " +
-                                    "Health: " + getPlayerAttribute("health"));
-                            return;
-                        } else {
-                            System.out.println("You can't eat the " + item.getName() + ".");
-                            return;
-                        }
-                    }
-                }
-                System.out.println("You don't have a " + itemName + ".");
-            }
-        
-            private static void handleExamineCommand(String target) {
-                for (Item item : player.getInventory()) {
-                    if (item.getName().equalsIgnoreCase(target)) {
-                        System.out.println(item.getDesc());
-                        return;
-                    }
-                }
-        
-                for (Item item : player.getCurrentLocation().getItems()) {
-                    if (item.getName().equalsIgnoreCase(target)) {
-                        System.out.println(item.getDesc());
-                        return;
-                    }
-                }
-        
-                for (NPC npc : player.getCurrentLocation().getNPCs()) {
-                    if (npc.getName().equalsIgnoreCase(target)) {
-                        System.out.println("This is " + npc.getName() + ".");
-                        return;
-                    }
-                }
-        
-                if (target.equalsIgnoreCase(player.getCurrentLocation().getName()) ||
-                        target.equals("here") || target.equals("around")) {
-                    handleLookCommand();
-                    return;
-                }
-        
-                System.out.println("You don't see any " + target + " here.");
-            }
-        
-            private static void handleHelpCommand() {
-                System.out.println("Available commands:\n" +
-                        "  look - Look around\n" +
-                        "  move [location] - Move to a connected location\n" +
-                        "  pickup [item] - Pick up an item\n" +
-                        "  drop [item] - Drop an item\n" +
-                        "  inventory (or inv) - Check your inventory\n" +
-                        "  examine [target] - Look at something closely\n" +
-                        "  eat [item] - Eat a food item\n" +
-                        "  help - Show this help message\n" +
-                        "  exit or quit - End the game");
-            }
-        
-            private static String getConnectionNames(Location location) {
-                List<Location> connections = location.getConnections();
-                return connections.isEmpty() ? "nowhere" :
-                        connections.stream()
-                                .map(Location::getName)
-                                .collect(Collectors.joining(", "));
-            }
-        
-            private static String getItemNames(List<Item> items) {
-                return items.isEmpty() ? "nothing" :
-                        items.stream()
-                                .map(Item::getName)
-                                .collect(Collectors.joining(", "));
-            }
-        
-            private static String getNpcNames(List<NPC> npcs) {
-                return npcs.stream()
-                        .map(NPC::getName)
-                        .collect(Collectors.joining(", "));
-            }
-            private static int getPlayerAttribute(String attributeName) {
-                return player.getAttributes().stream()
-                        .filter(attr -> attr.getName().equalsIgnoreCase(attributeName))
-                        .findFirst()
-                        .map(Attribute::getValue)
-                        .orElse(0);
-            }
-        
-            private static void setPlayerAttribute(String attributeName, int value) {
-                Attribute attribute = player.getAttributes().stream()
-                        .filter(attr -> attr.getName().equalsIgnoreCase(attributeName))
-                        .findFirst()
-                        .orElse(null);
-        
-                if (attribute != null) {
-                    attribute.setValue(value);
-                } else {
-                    player.getAttributes().add(new Attribute(attributeName, value));
-                }
-            }
-            private static String getAttributesString() {
-                return player.getAttributes().stream()
-                        .map(attr -> attr.getName() + ": " + attr.getValue())
-                        .collect(Collectors.joining(", "));
-            }
+        	                
+        	      
+        	                player = new Player("«player?.name ?: "DefaultPlayer"»",
+        	                new ArrayList<>(Arrays.asList(«IF player?.actions.empty»«ELSE»«FOR a : player?.actions ?: emptyList SEPARATOR ', '»actions.get("«a.name»")«ENDFOR»«ENDIF»)),
+        	                new ArrayList<>(Arrays.asList(«IF player?.inventory.empty»«ELSE»«FOR i : player?.inventory ?: emptyList SEPARATOR ', '»items.get("«i.name»")«ENDFOR»«ENDIF»)),
+        	                playerAttributes,
+        	                locations.get("«model.elem.filter(Story).head?.startLocation?.name ?: ""»"));                    
+        	                // Create Story
+        	                «val story = model.elem.filter(Story).head»
+        	                Story story = new Story("«story?.name ?: ""»", 
+        	                    "«story?.desc ?: ""»", 
+        	                locations.get("«story?.startLocation?.name ?: ""»"));
+        	            }
+        	             public static Player getPlayer() {
+        	                    return player;
+        	                }
+        	            
+        	                public static Story getStory() {
+        	                    return story;
+        	                }
         }
         '''
     }
